@@ -194,6 +194,14 @@ class nnUNetTrainer(object):
 
         self.was_initialized = False
 
+        self.early_stopping_patience = 30
+        self.early_stopping_min_delta = 0.001
+        self.early_stopping_counter = 0
+        self.early_stopping_best_ema_pseudo_dice = 0
+        self.print_to_log_file(f"Early stopping patience: {self.early_stopping_patience}, "
+                               f"min_delta: {self.early_stopping_min_delta}"
+                                "monitored quantity: ema_pseudo_dice")
+
         self.print_to_log_file("\n#######################################################################\n"
                                "Please cite the following paper when using nnU-Net:\n"
                                "Isensee, F., Jaeger, P. F., Kohl, S. A., Petersen, J., & Maier-Hein, K. H. (2021). "
@@ -388,12 +396,14 @@ class nnUNetTrainer(object):
 
     def _build_loss(self):
         if self.label_manager.has_regions:
+            self.print_to_log_file(f'Building DC_and_BCE_loss loss with has_regions: {self.label_manager.has_regions}, ignore_label: {self.label_manager.ignore_label}')
             loss = DC_and_BCE_loss({},
                                    {'batch_dice': self.configuration_manager.batch_dice,
                                     'do_bg': True, 'smooth': 1e-5, 'ddp': self.is_ddp},
                                    use_ignore_label=self.label_manager.ignore_label is not None,
                                    dice_class=MemoryEfficientSoftDiceLoss)
         else:
+            self.print_to_log_file(f'Building DC_and_CE_loss loss with has_regions: {self.label_manager.has_regions}, ignore_label: {self.label_manager.ignore_label}')
             loss = DC_and_CE_loss({'batch_dice': self.configuration_manager.batch_dice,
                                    'smooth': 1e-5, 'do_bg': False, 'ddp': self.is_ddp}, {}, weight_ce=1, weight_dice=1,
                                   ignore_label=self.label_manager.ignore_label, dice_class=MemoryEfficientSoftDiceLoss)
@@ -908,6 +918,7 @@ class nnUNetTrainer(object):
         maybe_mkdir_p(self.output_folder)
 
         # make sure deep supervision is on in the network
+        self.print_to_log_file(f'enable_deep_supervision: {self.enable_deep_supervision}')
         self.set_deep_supervision_enabled(self.enable_deep_supervision)
 
         self.print_plans()
@@ -944,6 +955,12 @@ class nnUNetTrainer(object):
         # This will lead to the wrong current epoch to be stored
         self.current_epoch -= 1
         self.save_checkpoint(join(self.output_folder, "checkpoint_final.pth"))
+
+        # Save a file called training_done_epochs{self.current_epoch}_{self.logger.my_fantastic_logging['ema_fg_dice'][-1]:.4f}.txt
+        # This is useful for the nnUNet training monitoring script
+        with open(join(self.output_folder, f"training-done_epochs{self.current_epoch}_ema-fg-dice{self.logger.my_fantastic_logging['ema_fg_dice'][-1]:.4f}.flag"), 'w') as f:
+            f.write('')
+
         self.current_epoch += 1
 
         # now we can delete latest
@@ -1145,6 +1162,15 @@ class nnUNetTrainer(object):
             self._best_ema = self.logger.my_fantastic_logging['ema_fg_dice'][-1]
             self.print_to_log_file(f"Yayy! New best EMA pseudo Dice: {np.round(self._best_ema, decimals=4)}")
             self.save_checkpoint(join(self.output_folder, 'checkpoint_best.pth'))
+        
+        # Check if the improvement is significant enough to reset early stopping
+        if self.early_stopping_best_ema_pseudo_dice is None or (self.logger.my_fantastic_logging['ema_fg_dice'][-1] - self.early_stopping_best_ema_pseudo_dice)>self.early_stopping_min_delta:
+            # reset early stopping counter
+            self.early_stopping_counter = 0
+            self.early_stopping_best_ema_pseudo_dice = self.logger.my_fantastic_logging['ema_fg_dice'][-1]
+        else:
+            self.early_stopping_counter += 1
+            self.print_to_log_file(f"No improvement in EMA pseudo Dice for {self.early_stopping_counter} epochs")
 
         if self.local_rank == 0:
             self.logger.plot_progress_png(self.output_folder)
@@ -1378,5 +1404,10 @@ class nnUNetTrainer(object):
                 self.on_validation_epoch_end(val_outputs)
 
             self.on_epoch_end()
+
+            # Check if we should stop training
+            if self.early_stopping_counter >= self.early_stopping_patience:
+                self.print_to_log_file("Early stopping triggered")
+                break
 
         self.on_train_end()
