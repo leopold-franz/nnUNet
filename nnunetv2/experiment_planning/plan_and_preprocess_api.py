@@ -1,7 +1,8 @@
 import warnings
 from typing import List, Type, Optional, Tuple, Union
 
-from batchgenerators.utilities.file_and_folder_operations import join, maybe_mkdir_p, load_json
+from batchgenerators.utilities.file_and_folder_operations import join, maybe_mkdir_p, load_json, isfile
+import shutil
 
 import nnunetv2
 from nnunetv2.configuration import default_num_processes
@@ -139,6 +140,12 @@ def preprocess_dataset(dataset_id: int,
         copy_file(dataset[k]['label'],
                   join(nnUNet_preprocessed, dataset_name, 'gt_segmentations', k + dataset_json['file_ending']),
                   update=True)
+        if dataset_json['file_ending']==".tif":
+            json_spacing_file = k + ".json"
+            dest_json_spacing_file = join(nnUNet_preprocessed, dataset_name, 'gt_segmentations', json_spacing_file)
+            src_json_path = dataset[k]['label'].replace(".tif", ".json")
+            if isfile(src_json_path):
+                shutil.copy(src_json_path, dest_json_spacing_file)
 
 
 def preprocess(dataset_ids: List[int],
