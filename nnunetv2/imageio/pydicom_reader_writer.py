@@ -73,7 +73,13 @@ class PyDicomIO(BaseReaderWriter):
             
             # Access the slice thickness
             try:
-                slice_thickness = dcm.SliceThickness
+                # check if dcm has slice thickness attribute
+                if hasattr(dcm, 'SliceThickness'):
+                    slice_thickness = dcm.SliceThickness
+                elif hasattr(dcm, 'SpacingBetweenSlices'):
+                    slice_thickness = dcm.SpacingBetweenSlices
+                else:
+                    raise AttributeError
             except AttributeError:
                 # Access the functional groups sequence
                 shared_functional_groups_sequence = dcm.SharedFunctionalGroupsSequence[
@@ -84,7 +90,12 @@ class PyDicomIO(BaseReaderWriter):
                     shared_functional_groups_sequence.PixelMeasuresSequence[0]
                 )
                 # Access the pixel spacing
-                slice_thickness = pixel_measures_sequence.SpacingBetweenSlices
+                if hasattr(pixel_measures_sequence, 'SliceThickness'):
+                    slice_thickness = pixel_measures_sequence.SliceThickness
+                elif hasattr(pixel_measures_sequence, 'SpacingBetweenSlices'):
+                    slice_thickness = pixel_measures_sequence.SpacingBetweenSlices
+                else:
+                    raise AttributeError
             return np.array([slice_thickness, pixel_spacing[0], pixel_spacing[1]])
         except Exception as e:
             print(f"WARNING: Could not extract spacing information from DICOM file. Setting spacing for all axis to 1.0. Error: {e}")
@@ -241,16 +252,21 @@ class PyDicomIO(BaseReaderWriter):
             preamble=b"\0" * 128,
         )
 
-        # Add patient and study information
+        # Add mandatory patient and study information
         ds.PatientName = properties.get("PatientName", "Unknown")
         ds.PatientID = properties.get("PatientID", "Unknown")
-        ds.PatientBirthDate = properties.get("PatientBirthDate", "Unknown")
-        ds.PatientSex = properties.get("PatientSex", "Unknown")
         ds.StudyInstanceUID = properties.get("StudyInstanceUID", generate_uid())
-        ds.StudyID = properties.get("StudyID", "Unknown")
         ds.InstanceNumber = properties.get("InstanceNumber", 1)
         ds.StudyDate = properties.get("StudyDate", "20000101")
         ds.StudyTime = properties.get("StudyTime", "000000")
+
+        # Add extra patient and study information if available
+        if "PatientBirthDate" in properties.keys():
+            ds.PatientBirthDate = properties["PatientBirthDate"]
+        if "PatientSex" in properties.keys():
+            ds.PatientSex = properties["PatientSex"]
+        if "StudyID" in properties.keys():
+            ds.StudyID = properties["StudyID"]
 
         # Copy location tags from original DICOM
         if "BodyPartExamined" in properties.keys():
@@ -313,15 +329,13 @@ class PyDicomIO(BaseReaderWriter):
         # Segmentation Series
         ds.SeriesNumber = 1  # Assuming a placeholder series number
 
-        if seg_series_uid is None:
-            seg_series_uid = generate_uid(
-                entropy_srcs=[
-                    properties["PatientID"],
-                    properties["StudyInstanceUID"],
-                    "Segmentation",
-                ]
-            )
-        ds.SeriesInstanceUID = seg_series_uid
+        ds.SeriesInstanceUID = generate_uid(
+            entropy_srcs=[
+                properties["PatientID"],
+                properties["StudyInstanceUID"],
+                "Segmentation",
+            ]
+        )
 
         ds.SOPInstanceUID = file_meta.MediaStorageSOPInstanceUID
         ds.Modality = "SEG"
@@ -381,17 +395,15 @@ class PyDicomIO(BaseReaderWriter):
         # Update the PixelData VR to 'OB' for 8-bit data
         ds[0x7FE0, 0x0010].VR = "OB"
 
-        # Save ds to file
-        ds.is_implicit_VR = False
-
         return ds
 
     def write_seg(self, seg: np.ndarray, output_fname: str, properties: dict) -> None:
+        # Squeeze the segmentation array to remove the channel dimension if present
+        seg = np.squeeze(seg)
         # Create a new DICOM dataset
         dcm = self.setup_segmentation_dcm(properties, seg)
-
         # Save the DICOM dataset to a file
-        dcm.save_as(output_fname)
+        dcm.save_as(output_fname, implicit_vr=False)
 
     def read_seg(self, seg_fname: str) -> Tuple[np.ndarray, dict]:
         # figure out file ending used here
@@ -400,8 +412,9 @@ class PyDicomIO(BaseReaderWriter):
 
         seg_dcm = pydicom.dcmread(seg_fname)
         seg = seg_dcm.pixel_array
-        seg = seg[None]
         is_3d = (len(seg.shape) == 3) and all([i > 3 for i in seg.shape])
         spacing = self._extract_spacing(seg_dcm, is_3d=is_3d)
-
-        return seg.astype(np.float32, copy=False), {'spacing': spacing}
+        
+        # add channel dimension
+        seg = seg[None]
+        return seg.astype(np.float32, copy=False), {'spacing': spacing.tolist()}

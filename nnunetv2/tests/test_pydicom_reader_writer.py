@@ -30,6 +30,13 @@ class TestPyDicomIO(unittest.TestCase):
         self.dcm.Columns = 256
         self.dcm.NumberOfFrames = 10
         self.dcm.PixelData = np.random.randint(0, 256, (10, 256, 256), dtype=np.uint8).tobytes()
+        # Samples per Pixel
+        self.dcm.SamplesPerPixel = 1
+        self.dcm.PixelRepresentation = 0
+        self.dcm.PhotometricInterpretation = "MONOCHROME2"
+        self.dcm.BitsAllocated = 8
+        self.dcm.BitsStored = 8
+        self.dcm.HighBit = 7
         self.dcm.PatientID = "12345"
         self.dcm.PatientName = "Test^Patient"
         self.dcm.StudyInstanceUID = "1.2.3.4"
@@ -52,10 +59,10 @@ class TestPyDicomIO(unittest.TestCase):
 
     def test_read_images(self):
         # Save the sample DICOM dataset to a file
-        self.dcm.save_as("test.dcm")
+        self.dcm.save_as("test.dcm", implicit_vr=False)
         reader = PyDicomIO()
         images, props = reader.read_images(["test.dcm"])
-        self.assertEqual(images.shape, (10, 1, 256, 256))
+        self.assertEqual(images.shape, (1, 10, 256, 256))
         self.assertEqual(props["spacing"], [1.0, 0.5, 0.5])
         os.remove("test.dcm")
 
@@ -78,7 +85,7 @@ class TestPyDicomIO(unittest.TestCase):
         os.remove("test_seg.dcm")
 
     def test_read_seg(self):
-        seg = np.random.randint(0, 2, (128, 128, 128), dtype=np.uint8)
+        seg = np.random.randint(0, 2, (1, 128, 128, 128), dtype=np.uint8) # 3D segmentation with channel
         properties = {
             "PatientID": "12345",
             "StudyInstanceUID": "1.2.3.4",
@@ -91,7 +98,7 @@ class TestPyDicomIO(unittest.TestCase):
         writer.write_seg(seg, "test_seg.dcm", properties)
         reader = PyDicomIO()
         read_seg, props = reader.read_seg("test_seg.dcm")
-        self.assertEqual(read_seg.shape, (128, 128, 128))
+        self.assertEqual(read_seg.shape, (1,128, 128, 128))
         self.assertEqual(props["spacing"], [1.0, 0.5, 0.5])
         os.remove("test_seg.dcm")
 
