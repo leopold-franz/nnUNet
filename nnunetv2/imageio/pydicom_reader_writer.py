@@ -380,7 +380,7 @@ class PyDicomIO(BaseReaderWriter):
         ds.PixelRepresentation = 0
 
         # Save numpy array to pixel array
-        ds.set_pixel_data(segmentation_array)
+        ds.set_pixel_data(segmentation_array.astype("uint8"), photometric_interpretation="MONOCHROME2", bits_stored=8)
 
         # Update the PixelData VR to 'OB' for 8-bit data
         ds[0x7FE0, 0x0010].VR = "OB"
