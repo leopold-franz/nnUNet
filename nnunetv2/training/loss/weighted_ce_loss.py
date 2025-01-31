@@ -40,6 +40,10 @@ class WeightedCrossEntropyLoss(torch.nn.Module):
         self.ignore_index = ignore_index
 
     def forward(self, input, target):
+        """
+        input:  torch.Size([2, 3, 32, 16, 28]) , target (init):  torch.Size([2, 1, 32, 16, 28])
+        input:  torch.Size([2, 3, 32, 16, 28]) , target (squeezed):  torch.Size([2, 32, 16, 28])
+        """
         weight = self._class_weights(input)
         if target.ndim == input.ndim:
             assert target.shape[1] == 1
