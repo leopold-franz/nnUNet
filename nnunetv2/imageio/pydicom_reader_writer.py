@@ -370,27 +370,17 @@ class PyDicomIO(BaseReaderWriter):
         ds.ReferencedSeriesSequence = [ref_series_seq]
 
         # Add the necessary DICOM tags for segmentation
-        ds.BitsAllocated = 8
-        ds.BitsStored = 8
-        ds.HighBit = 7
-        ds.SamplesPerPixel = 1
-        ds.PhotometricInterpretation = "MONOCHROME2"
         if segmentation_array.ndim == 3:
-            ds.NumberOfFrames = segmentation_array.shape[0]
             ds.SpacingBetweenSlices = properties["spacing"][0]
             ds.PixelSpacing = properties["spacing"][1:]
         else:
-            ds.NumberOfFrames = 1
             ds.PixelSpacing = properties["spacing"]
         ds.Rows = segmentation_array.shape[1]
         ds.Columns = segmentation_array.shape[2]
         ds.PixelRepresentation = 0
 
         # Save numpy array to pixel array
-        data_bytes = segmentation_array.astype(np.uint8).tobytes()
-        if len(data_bytes) % 2 != 0:
-            data_bytes += b"\x00"  # Pad with a zero byte to make the length even
-        ds.PixelData = data_bytes
+        ds.set_pixel_data(segmentation_array.astype("uint8"), photometric_interpretation="MONOCHROME2", bits_stored=8)
 
         # Update the PixelData VR to 'OB' for 8-bit data
         ds[0x7FE0, 0x0010].VR = "OB"
