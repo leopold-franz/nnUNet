@@ -199,16 +199,21 @@ class PyDicomIO(BaseReaderWriter):
 
         images = []
         for f in image_fnames:
-            dcm = pydicom.dcmread(f)
-            image = dcm.pixel_array
-            is_3d = (len(image.shape) == 3) and all([i > 3 for i in image.shape])
-            # verify shape of image corresponds to metadata shape
-            self._verify_shape(dcm, is_3d)
-            images.append(image[None])
-            spacing = self._extract_spacing(dcm, is_3d=True)
-            props = {'spacing': spacing.tolist()}
-            # Extract supplimentary information from DICOM metadata
-            props.update(self._extract_supplementary_props(dcm))
+            try:
+                dcm = pydicom.dcmread(f)
+                image = dcm.pixel_array
+                is_3d = (len(image.shape) == 3) and all([i > 3 for i in image.shape])
+                # verify shape of image corresponds to metadata shape
+                self._verify_shape(dcm, is_3d)
+                images.append(image[None])
+                spacing = self._extract_spacing(dcm, is_3d=True)
+                props = {'spacing': spacing.tolist()}
+                # Extract supplimentary information from DICOM metadata
+                props.update(self._extract_supplementary_props(dcm))
+            except pydicom.errors.InvalidDicomError as e:
+                print(f"Error: Could not read DICOM file {f}. Error: {e}")
+                raise e
+
 
         if not self._check_all_same([i.shape for i in images]):
             print('ERROR! Not all input images have the same shape!')
