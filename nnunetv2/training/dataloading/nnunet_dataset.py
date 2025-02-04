@@ -83,7 +83,14 @@ class nnUNetDataset(object):
             data = entry['open_data_file']
             # print('using open data file')
         elif isfile(entry['data_file'][:-4] + ".npy"):
-            data = np.load(entry['data_file'][:-4] + ".npy", 'r')
+            try:
+                data = np.load(entry['data_file'][:-4] + ".npy", 'r')
+            except EOFError as e:
+                print(f"asdfghmfetgr346t - EOFError in {entry['data_file'][:-4] + '_seg.npy'}")
+                raise e
+            except ValueError as e:
+                print(f"asdfghmfetgr346t - ValueError in {entry['data_file'][:-4] + '_seg.npy'}")
+                raise e
             if self.keep_files_open:
                 self.dataset[key]['open_data_file'] = data
                 # print('saving open data file')
@@ -94,12 +101,26 @@ class nnUNetDataset(object):
             seg = entry['open_seg_file']
             # print('using open data file')
         elif isfile(entry['data_file'][:-4] + "_seg.npy"):
-            seg = np.load(entry['data_file'][:-4] + "_seg.npy", 'r')
-            if self.keep_files_open:
-                self.dataset[key]['open_seg_file'] = seg
-                # print('saving open seg file')
+            try:
+                seg = np.load(entry['data_file'][:-4] + "_seg.npy", 'r')
+                if self.keep_files_open:
+                    self.dataset[key]['open_seg_file'] = seg
+                    # print('saving open seg file')
+            except EOFError as e:
+                print(f"asdfghmfetgr346t - EOFError in {entry['data_file'][:-4] + '_seg.npy'}")
+                raise e
+            except ValueError as e:
+                print(f"asdfghmfetgr346t - ValueError in {entry['data_file'][:-4] + '_seg.npy'}")
+                raise e
         else:
-            seg = np.load(entry['data_file'])['seg']
+            try:
+                seg = np.load(entry['data_file'])['seg']
+            except EOFError as e:
+                print(f"asdfghmfetgr346t - EOFError in {entry['data_file'][:-4] + '_seg.npy'}")
+                raise e
+            except ValueError as e:
+                print(f"asdfghmfetgr346t - ValueError in {entry['data_file'][:-4] + '_seg.npy'}")
+                raise e
 
         if 'seg_from_prev_stage_file' in entry.keys():
             if isfile(entry['seg_from_prev_stage_file'][:-4] + ".npy"):
