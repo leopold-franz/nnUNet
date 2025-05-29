@@ -199,16 +199,21 @@ class PyDicomIO(BaseReaderWriter):
 
         images = []
         for f in image_fnames:
-            dcm = pydicom.dcmread(f)
-            image = dcm.pixel_array
-            is_3d = (len(image.shape) == 3) and all([i > 3 for i in image.shape])
-            # verify shape of image corresponds to metadata shape
-            self._verify_shape(dcm, is_3d)
-            images.append(image[None])
-            spacing = self._extract_spacing(dcm, is_3d=True)
-            props = {'spacing': spacing.tolist()}
-            # Extract supplimentary information from DICOM metadata
-            props.update(self._extract_supplementary_props(dcm))
+            try:
+                dcm = pydicom.dcmread(f)
+                image = dcm.pixel_array
+                is_3d = (len(image.shape) == 3) and all([i > 3 for i in image.shape])
+                # verify shape of image corresponds to metadata shape
+                self._verify_shape(dcm, is_3d)
+                images.append(image[None])
+                spacing = self._extract_spacing(dcm, is_3d=True)
+                props = {'spacing': spacing.tolist()}
+                # Extract supplimentary information from DICOM metadata
+                props.update(self._extract_supplementary_props(dcm))
+            except pydicom.errors.InvalidDicomError as e:
+                print(f"Error: Could not read DICOM file {f}. Error: {e}")
+                raise e
+
 
         if not self._check_all_same([i.shape for i in images]):
             print('ERROR! Not all input images have the same shape!')
@@ -370,27 +375,17 @@ class PyDicomIO(BaseReaderWriter):
         ds.ReferencedSeriesSequence = [ref_series_seq]
 
         # Add the necessary DICOM tags for segmentation
-        ds.BitsAllocated = 8
-        ds.BitsStored = 8
-        ds.HighBit = 7
-        ds.SamplesPerPixel = 1
-        ds.PhotometricInterpretation = "MONOCHROME2"
         if segmentation_array.ndim == 3:
-            ds.NumberOfFrames = segmentation_array.shape[0]
             ds.SpacingBetweenSlices = properties["spacing"][0]
             ds.PixelSpacing = properties["spacing"][1:]
         else:
-            ds.NumberOfFrames = 1
             ds.PixelSpacing = properties["spacing"]
         ds.Rows = segmentation_array.shape[1]
         ds.Columns = segmentation_array.shape[2]
         ds.PixelRepresentation = 0
 
         # Save numpy array to pixel array
-        data_bytes = segmentation_array.astype(np.uint8).tobytes()
-        if len(data_bytes) % 2 != 0:
-            data_bytes += b"\x00"  # Pad with a zero byte to make the length even
-        ds.PixelData = data_bytes
+        ds.set_pixel_data(segmentation_array.astype("uint8"), photometric_interpretation="MONOCHROME2", bits_stored=8)
 
         # Update the PixelData VR to 'OB' for 8-bit data
         ds[0x7FE0, 0x0010].VR = "OB"
