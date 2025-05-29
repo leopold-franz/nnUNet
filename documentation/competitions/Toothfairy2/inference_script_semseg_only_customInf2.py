@@ -73,7 +73,7 @@ class CustomPredictor(nnUNetPredictor):
         for i, f in enumerate(use_folds):
             f = int(f) if f != 'all' else f
             checkpoint = torch.load(join(model_training_output_dir, f'fold_{f}', checkpoint_name),
-                                    map_location=torch.device('cpu'))
+                                    map_location=torch.device('cpu'), weights_only=False)
             if i == 0:
                 trainer_name = checkpoint['trainer_name']
                 configuration_name = checkpoint['init_args']['configuration']
@@ -145,7 +145,7 @@ class CustomPredictor(nnUNetPredictor):
             # we are loading parameters on demand instead of loading them upfront. This reduces memory footprint a lot.
             # each set of parameters is only used once on the test set (one image) so run time wise this is almost the
             # same
-            self.network.load_state_dict(torch.load(p, map_location=compute_device)['network_weights'])
+            self.network.load_state_dict(torch.load(p, map_location=compute_device, weights_only=False)['network_weights'])
             with torch.autocast(self.device.type, enabled=True):
                 for sl in tqdm(slicers, disable=not self.allow_tqdm):
                     pred = self._internal_maybe_mirror_and_predict(data[sl][None].to(compute_device))[0].to(
