@@ -189,7 +189,7 @@ class nnUNetTrainer(object):
 
         self.was_initialized = False
 
-        self.early_stopping_patience = 30
+        self.early_stopping_patience = 100
         self.early_stopping_min_delta = 0.001
         self.early_stopping_counter = 0
         self.early_stopping_best_ema_pseudo_dice = 0
@@ -398,14 +398,14 @@ class nnUNetTrainer(object):
 
     def _build_loss(self):
         if self.label_manager.has_regions:
-            self.print_to_log_file(f'Building DC_and_BCE_loss loss with has_regions: {self.label_manager.has_regions}, ignore_label: {self.label_manager.ignore_label}')
+            # self.print_to_log_file(f'Building DC_and_BCE_loss loss with has_regions: {self.label_manager.has_regions}, ignore_label: {self.label_manager.ignore_label}')
             loss = DC_and_BCE_loss({},
                                    {'batch_dice': self.configuration_manager.batch_dice,
                                     'do_bg': True, 'smooth': 1e-5, 'ddp': self.is_ddp},
                                    use_ignore_label=self.label_manager.ignore_label is not None,
                                    dice_class=MemoryEfficientSoftDiceLoss)
         else:
-            self.print_to_log_file(f'Building DC_and_CE_loss loss with has_regions: {self.label_manager.has_regions}, ignore_label: {self.label_manager.ignore_label}')
+            # self.print_to_log_file(f'Building DC_and_CE_loss loss with has_regions: {self.label_manager.has_regions}, ignore_label: {self.label_manager.ignore_label}')
             loss = DC_and_CE_loss({'batch_dice': self.configuration_manager.batch_dice,
                                    'smooth': 1e-5, 'do_bg': False, 'ddp': self.is_ddp}, {}, weight_ce=1, weight_dice=1,
                                   ignore_label=self.label_manager.ignore_label, dice_class=MemoryEfficientSoftDiceLoss)
@@ -912,7 +912,7 @@ class nnUNetTrainer(object):
         maybe_mkdir_p(self.output_folder)
 
         # make sure deep supervision is on in the network
-        self.print_to_log_file(f'enable_deep_supervision: {self.enable_deep_supervision}')
+        # self.print_to_log_file(f'enable_deep_supervision: {self.enable_deep_supervision}')
         self.set_deep_supervision_enabled(self.enable_deep_supervision)
 
         self.print_plans()
