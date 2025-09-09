@@ -41,6 +41,7 @@ dependencies = [
     "scikit-image>=0.19.3",
     "SimpleITK>=2.2.1",
     "pandas",
+    "pydicom>=3.0.1",
     "graphviz",
     'tifffile',
     'requests',

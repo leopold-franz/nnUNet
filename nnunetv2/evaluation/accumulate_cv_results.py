@@ -40,6 +40,10 @@ def accumulate_cv_results(trained_model_folder,
                 raise RuntimeError(f'More than one of your folds has a prediction for case {pf}')
             if overwrite or not isfile(join(merged_output_folder, pf)):
                 shutil.copy(join(expected_validation_folder, pf), join(merged_output_folder, pf))
+                if dataset_json['file_ending']==".tif":
+                    json_spacing_file = pf.replace(".tif", ".json")
+                    if isfile(join(expected_validation_folder, json_spacing_file)):
+                        shutil.copy(join(expected_validation_folder, json_spacing_file), join(merged_output_folder, json_spacing_file))
                 did_we_copy_something = True
 
     if did_we_copy_something or not isfile(join(merged_output_folder, 'summary.json')):
