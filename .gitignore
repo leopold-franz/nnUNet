@@ -117,4 +117,4 @@ ENV/
 
 # UV Files & Follicle Tracker reference files
 uv.lock
-nnunetv2/ft_pipeline
+ft_pipeline
