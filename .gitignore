@@ -114,3 +114,7 @@ ENV/
 *.model
 
 !documentation/assets/scribble_example.png
+
+# UV Files & Follicle Tracker reference files
+uv.lock
+nnunetv2/ft_pipeline
