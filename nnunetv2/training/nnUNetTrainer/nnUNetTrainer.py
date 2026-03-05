@@ -966,9 +966,10 @@ class nnUNetTrainer(object):
         self.current_epoch -= 1
         self.save_checkpoint(join(self.output_folder, "checkpoint_final.pth"))
 
-        # Save a file called training_done_epochs{self.current_epoch}_{self.logger.my_fantastic_logging['ema_fg_dice'][-1]:.4f}.txt
+        # Save a file called training_done_epochs{self.current_epoch}_{ema_fg_dice:.4f}.txt
         # This is useful for the nnUNet training monitoring script
-        with open(join(self.output_folder, f"training-done_epochs{self.current_epoch}_ema-fg-dice{self.logger.my_fantastic_logging['ema_fg_dice'][-1]:.4f}.flag"), 'w') as f:
+        ema_fg_dice = self.logger.get_value('ema_fg_dice', step=-1)
+        with open(join(self.output_folder, f"training-done_epochs{self.current_epoch}_ema-fg-dice{ema_fg_dice:.4f}.flag"), 'w') as f:
             f.write('')
 
         self.current_epoch += 1
@@ -1174,10 +1175,11 @@ class nnUNetTrainer(object):
             self.save_checkpoint(join(self.output_folder, 'checkpoint_best.pth'))
         
         # Check if the improvement is significant enough to reset early stopping
-        if self.early_stopping_best_ema_pseudo_dice is None or (self.logger.my_fantastic_logging['ema_fg_dice'][-1] - self.early_stopping_best_ema_pseudo_dice)>self.early_stopping_min_delta:
+        current_ema_fg_dice = self.logger.get_value('ema_fg_dice', step=-1)
+        if self.early_stopping_best_ema_pseudo_dice is None or (current_ema_fg_dice - self.early_stopping_best_ema_pseudo_dice) > self.early_stopping_min_delta:
             # reset early stopping counter
             self.early_stopping_counter = 0
-            self.early_stopping_best_ema_pseudo_dice = self.logger.my_fantastic_logging['ema_fg_dice'][-1]
+            self.early_stopping_best_ema_pseudo_dice = current_ema_fg_dice
         else:
             self.early_stopping_counter += 1
             self.print_to_log_file(f"No improvement in EMA pseudo Dice for {self.early_stopping_counter} epochs")
