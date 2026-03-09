@@ -187,6 +187,11 @@ class nnUNetTrainer(object):
         self.save_every = 50
         self.disable_checkpointing = False
 
+        ### early stopping
+        self.early_stopping_patience = 50
+        self._epochs_since_best_ema = 0
+        self._early_stop_triggered = False
+
         self.was_initialized = False
 
         self.print_to_log_file("\n#######################################################################\n"
@@ -1138,8 +1143,19 @@ class nnUNetTrainer(object):
         # handle 'best' checkpointing. ema_fg_dice is computed by the logger and can be accessed like this
         if self._best_ema is None or self.logger.my_fantastic_logging['ema_fg_dice'][-1] > self._best_ema:
             self._best_ema = self.logger.my_fantastic_logging['ema_fg_dice'][-1]
+            self._epochs_since_best_ema = 0
             self.print_to_log_file(f"Yayy! New best EMA pseudo Dice: {np.round(self._best_ema, decimals=4)}")
             self.save_checkpoint(join(self.output_folder, 'checkpoint_best.pth'))
+        else:
+            self._epochs_since_best_ema += 1
+            self.print_to_log_file(f"No improvement for {self._epochs_since_best_ema} epochs "
+                                   f"(early stopping patience: {self.early_stopping_patience})")
+
+        # early stopping check
+        if self.early_stopping_patience is not None and self._epochs_since_best_ema >= self.early_stopping_patience:
+            self.print_to_log_file(f"Early stopping triggered! No improvement in EMA pseudo Dice for "
+                                   f"{self.early_stopping_patience} epochs.")
+            self._early_stop_triggered = True
 
         if self.local_rank == 0:
             self.logger.plot_progress_png(self.output_folder)
@@ -1166,6 +1182,7 @@ class nnUNetTrainer(object):
                     'init_args': self.my_init_kwargs,
                     'trainer_name': self.__class__.__name__,
                     'inference_allowed_mirroring_axes': self.inference_allowed_mirroring_axes,
+                    '_epochs_since_best_ema': self._epochs_since_best_ema,
                 }
                 torch.save(checkpoint, filename)
             else:
@@ -1192,6 +1209,7 @@ class nnUNetTrainer(object):
         self._best_ema = checkpoint['_best_ema']
         self.inference_allowed_mirroring_axes = checkpoint[
             'inference_allowed_mirroring_axes'] if 'inference_allowed_mirroring_axes' in checkpoint.keys() else self.inference_allowed_mirroring_axes
+        self._epochs_since_best_ema = checkpoint.get('_epochs_since_best_ema', 0)
 
         # messing with state dict naming schemes. Facepalm.
         if self.is_ddp:
@@ -1383,5 +1401,8 @@ class nnUNetTrainer(object):
                 self.on_validation_epoch_end(val_outputs)
 
             self.on_epoch_end()
+
+            if self._early_stop_triggered:
+                break
 
         self.on_train_end()
